@@ -125,26 +125,45 @@ def view_cart():
 
 @app.route('/place_order', methods=['POST'])
 def place_order():
-    if not session.get('cart'):
+    cart = session.get('cart', {})
+
+    if not cart:
         return redirect('/menu/1')
 
     customer_name = request.form.get('customer_name')
     mobile = request.form.get('mobile')
     table_no = request.form.get('table_no')
 
-    cart = session.get('cart', [])
-
     db = get_db_connection()
     cursor = db.cursor()
 
     try:
         total = 0
+        order_items = []
 
-        # Calculate total
-        for item in cart:
-            total += int(item['price']) * int(item['quantity'])
+        # Cart madhun menu details ghe
+        for menu_id, quantity in cart.items():
 
-        # Insert order
+            cursor.execute(
+                "SELECT id, price FROM menu WHERE id = %s",
+                (int(menu_id),)
+            )
+
+            item = cursor.fetchone()
+
+            if not item:
+                continue
+
+            price = int(item[1])
+            quantity = int(quantity)
+
+            total += price * quantity
+
+            order_items.append(
+                (int(menu_id), quantity, price)
+            )
+
+        # Order insert
         cursor.execute("""
             INSERT INTO orders
             (table_no, customer_name, mobile, total, status, order_time)
@@ -160,17 +179,18 @@ def place_order():
 
         order_id = cursor.fetchone()[0]
 
-        # Insert order items
-        for item in cart:
+        # Order items insert
+        for menu_id, quantity, price in order_items:
+
             cursor.execute("""
                 INSERT INTO order_items
                 (order_id, menu_id, quantity, price)
                 VALUES (%s, %s, %s, %s)
             """, (
                 order_id,
-                item['id'],
-                item['quantity'],
-                item['price']
+                menu_id,
+                quantity,
+                price
             ))
 
         db.commit()
