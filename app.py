@@ -128,44 +128,40 @@ def view_cart():
 @app.route('/place_order', methods=['POST'])
 def place_order():
     cart = session.get('cart', {})
+    table_no = session.get('table_id', 1)
 
     if not cart:
-        return redirect('/menu/1')
+        return redirect(url_for('view_cart'))
 
-    customer_name = request.form.get('customer_name')
-    mobile = request.form.get('mobile')
-    table_no = request.form.get('table_no')
+    customer_name = request.form.get('customer_name', 'Guest').strip()
+    mobile = request.form.get('mobile', '').strip()
 
     db = get_db_connection()
-    cursor = db.cursor()
+    cursor = db.cursor(cursor_factory=RealDictCursor)
 
     try:
         total = 0
-        order_items = []
+        cart_items = []
 
-        # Cart madhun menu details ghe
-        for menu_id, quantity in cart.items():
+        for item_id_str, qty in cart.items():
 
             cursor.execute(
                 "SELECT id, price FROM menu WHERE id = %s",
-                (int(menu_id),)
+                (int(item_id_str),)
             )
 
             item = cursor.fetchone()
 
-            if not item:
-                continue
+            if item:
+                price = int(item['price'])
+                quantity = int(qty)
 
-            price = int(item[1])
-            quantity = int(quantity)
+                total += price * quantity
 
-            total += price * quantity
+                cart_items.append(
+                    (item['id'], quantity, price)
+                )
 
-            order_items.append(
-                (int(menu_id), quantity, price)
-            )
-
-        # Order insert
         cursor.execute("""
             INSERT INTO orders
             (table_no, customer_name, mobile, total, status, order_time)
@@ -179,11 +175,9 @@ def place_order():
             'Pending'
         ))
 
-        order_id = cursor.fetchone()[0]
+        order_id = cursor.fetchone()['order_id']
 
-        # Order items insert
-        for menu_id, quantity, price in order_items:
-
+        for menu_id, quantity, price in cart_items:
             cursor.execute("""
                 INSERT INTO order_items
                 (order_id, menu_id, quantity, price)
@@ -202,7 +196,8 @@ def place_order():
         return render_template(
             'order_success.html',
             order_id=order_id,
-            total=total
+            total=total,
+            table_no=table_no
         )
 
     except Exception as e:
