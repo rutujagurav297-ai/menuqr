@@ -21,10 +21,12 @@ app.secret_key = 'hotel-taj-super-secret-key-9876'
 
 FAST2SMS_API_KEY = ""
 def get_db_connection():
-    # Environment variable ऐवजी direct pooler connection string टाका
-    database_URL = "postgresql://postgres.ayjujhtrmrjlqwwgycqc:rutuja_sayali12@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
-    return psycopg2.connect(database_URL)
+    database_URL = os.environ.get("DATABASE_URL")
 
+    if not database_URL:
+        raise ValueError("DATABASE_URL is not set")
+
+    return psycopg2.connect(database_URL)
 
 
 
