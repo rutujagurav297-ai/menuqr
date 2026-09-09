@@ -125,44 +125,72 @@ def view_cart():
 
 @app.route('/place_order', methods=['POST'])
 def place_order():
-    cart = session.get('cart', {})
-    table_no = session.get('table_id', 1)
-    if not cart:
-        return redirect(url_for('view_cart'))
+    if not session.get('cart'):
+        return redirect('/menu/1')
 
-    customer_name = request.form.get('customer_name', 'Guest').strip()
-    mobile = request.form.get('mobile', '').strip()
+    customer_name = request.form.get('customer_name')
+    mobile = request.form.get('mobile')
+    table_no = request.form.get('table_no')
+
+    cart = session.get('cart', [])
 
     db = get_db_connection()
-    cursor = db.cursor(cursor_factory=RealDictCursor)
-    
-    total = 0
-    cart_items = []
-    for item_id_str, qty in cart.items():
-        cursor.execute("SELECT * FROM menu WHERE id = %s", (int(item_id_str),))
-        item = cursor.fetchone()
-        if item:
-            total += item['price'] * qty
-            cart_items.append((item['id'], qty, item['price']))
+    cursor = db.cursor()
 
-  
-    cursor.execute("""
-        INSERT INTO orders
-        (table_no, customer_name, mobile, total, status)
-        VALUES (%s, %s, %s, %s, 'Pending')
-        RETURNING order_id
-    """, (table_no, customer_name, mobile, total))
-    order_id = cursor.fetchone()['order_id']
+    try:
+        total = 0
 
-    for menu_id, quantity, price in cart_items:
-        cursor.execute("INSERT INTO order_items (order_id, menu_id, quantity, price) VALUES (%s, %s, %s, %s)", 
-                       (order_id, menu_id, quantity, price))
+        # Calculate total
+        for item in cart:
+            total += int(item['price']) * int(item['quantity'])
 
-    db.commit()
-    cursor.close()
-    db.close()
-    session.pop('cart', None)
-    return render_template('order_success.html', order_id=order_id, total=total, table_no=table_no)
+        # Insert order
+        cursor.execute("""
+            INSERT INTO orders
+            (table_no, customer_name, mobile, total, status, order_time)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            RETURNING order_id
+        """, (
+            table_no,
+            customer_name,
+            mobile,
+            total,
+            'Pending'
+        ))
+
+        order_id = cursor.fetchone()[0]
+
+        # Insert order items
+        for item in cart:
+            cursor.execute("""
+                INSERT INTO order_items
+                (order_id, menu_id, quantity, price)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                order_id,
+                item['id'],
+                item['quantity'],
+                item['price']
+            ))
+
+        db.commit()
+
+        session.pop('cart', None)
+
+        return render_template(
+            'order_success.html',
+            order_id=order_id,
+            total=total
+        )
+
+    except Exception as e:
+        db.rollback()
+        print("PLACE ORDER ERROR:", e)
+        return "Place Order Error: " + str(e), 500
+
+    finally:
+        cursor.close()
+        db.close()
 
 # पीडीएफ बिल डाउनलोड
 @app.route('/download_pdf/<int:order_id>')
