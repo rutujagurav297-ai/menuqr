@@ -1,37 +1,28 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, make_response
-
 import qrcode
 import io
 import base64
 from datetime import datetime
 import requests 
-
 import psycopg2
 from psycopg2.extras import RealDictCursor
-
-
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
 
-app.secret_key = 'hotel-taj-super-secret-key-9876'
+# Secret key Environment variable मधून घेणे सुरक्षेसाठी चांगले आहे
+app.secret_key = os.environ.get("SECRET_KEY", "hotel-taj-super-secret-key-9876")
 
+# Fast2SMS API Key
+FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
 
-FAST2SMS_API_KEY = ""
 def get_db_connection():
     database_URL = os.environ.get("DATABASE_URL")
-
     if not database_URL:
         raise ValueError("DATABASE_URL is not set")
-
     return psycopg2.connect(database_URL)
-
-
-
-
-
 
 def generate_qr_base64(data):
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
@@ -43,10 +34,8 @@ def generate_qr_base64(data):
     buf.seek(0)
     return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
 
-
 @app.route('/', methods=['GET', 'POST'])
 def login():
-    
     return redirect(url_for('dashboard'))
 
 @app.route('/dashboard')
@@ -58,7 +47,6 @@ def show_qr(table_id):
     menu_url = request.host_url + f"menu/{table_id}"
     qr_image = generate_qr_base64(menu_url)
     return render_template('qr_page.html', table_id=table_id, menu_url=menu_url, qr_image=qr_image)
-
 
 @app.route('/menu/<int:table_id>')
 def menu(table_id):
@@ -124,7 +112,6 @@ def view_cart():
         db.close()
     return render_template('cart.html', cart_items=cart_items, total=total, table_id=table_id)
 
-
 @app.route('/place_order', methods=['POST'])
 def place_order():
     cart = session.get('cart', {})
@@ -144,36 +131,21 @@ def place_order():
         cart_items = []
 
         for item_id_str, qty in cart.items():
-
-            cursor.execute(
-                "SELECT id, price FROM menu WHERE id = %s",
-                (int(item_id_str),)
-            )
-
+            cursor.execute("SELECT id, price FROM menu WHERE id = %s", (int(item_id_str),))
             item = cursor.fetchone()
 
             if item:
                 price = int(item['price'])
                 quantity = int(qty)
-
                 total += price * quantity
-
-                cart_items.append(
-                    (item['id'], quantity, price)
-                )
+                cart_items.append((item['id'], quantity, price))
 
         cursor.execute("""
             INSERT INTO orders
             (table_no, customer_name, mobile, total, status, order_time)
             VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             RETURNING order_id
-        """, (
-            table_no,
-            customer_name,
-            mobile,
-            total,
-            'Pending'
-        ))
+        """, (table_no, customer_name, mobile, total, 'Pending'))
 
         order_id = cursor.fetchone()['order_id']
 
@@ -182,23 +154,12 @@ def place_order():
                 INSERT INTO order_items
                 (order_id, menu_id, quantity, price)
                 VALUES (%s, %s, %s, %s)
-            """, (
-                order_id,
-                menu_id,
-                quantity,
-                price
-            ))
+            """, (order_id, menu_id, quantity, price))
 
         db.commit()
-
         session.pop('cart', None)
 
-        return render_template(
-            'order_success.html',
-            order_id=order_id,
-            total=total,
-            table_no=table_no
-        )
+        return render_template('order_success.html', order_id=order_id, total=total, table_no=table_no)
 
     except Exception as e:
         db.rollback()
@@ -209,7 +170,6 @@ def place_order():
         cursor.close()
         db.close()
 
-# पीडीएफ बिल डाउनलोड
 @app.route('/download_pdf/<int:order_id>')
 def download_pdf(order_id):
     db = get_db_connection()
@@ -263,7 +223,6 @@ def logout():
     session.pop('admin', None)
     return redirect('/admin')
 
-
 @app.route('/chef')
 def chef():
     if not session.get('admin'):
@@ -294,7 +253,6 @@ def chef():
     db.close()
     return render_template("chef.html", orders=pending_orders, all_history=all_history, today_sales=today_sales, total_orders=total_orders, most_ordered=most_ordered)
 
-
 @app.route('/complete_order/<int:order_id>', methods=['POST'])
 def complete_order(order_id):
     db = get_db_connection()
@@ -307,20 +265,23 @@ def complete_order(order_id):
     cursor.close()
     db.close()
     
-    customer_mobile = order_data['mobile']
-    customer_name = order_data['customer_name']
-    
-    if customer_mobile and len(customer_mobile) == 10:
-        message_text = f"Hello {customer_name}, Hotel Taj madhe tumchi Order #{order_id} accept zali ahe ani jevan tayar hot ahe! 🍳"
-        url = "https://fast2sms.com"
-        payload = {"message": message_text, "language": "english", "route": "q", "numbers": customer_mobile}
-        headers = {'authorization': FAST2SMS_API_KEY, 'Content-Type': "application/x-www-form-urlencoded", 'Cache-Control': "no-cache"}
-        try:
-            response = requests.post(url, data=payload, headers=headers)
-            print("Fast2SMS Response:", response.json())
-        except Exception as e:
-            print("SMS Error:", e)
-            return redirect('/chef')
+    if order_data:
+        customer_mobile = order_data.get('mobile')
+        customer_name = order_data.get('customer_name')
+        
+        if customer_mobile and len(customer_mobile) == 10 and FAST2SMS_API_KEY:
+            message_text = f"Hello {customer_name}, Hotel Taj madhe tumchi Order #{order_id} accept zali ahe ani jevan tayar hot ahe! 🍳"
+            url = "https://www.fast2sms.com/dev/bulkV2"
+            payload = {"message": message_text, "language": "english", "route": "q", "numbers": customer_mobile}
+            headers = {'authorization': FAST2SMS_API_KEY, 'Content-Type': "application/x-www-form-urlencoded", 'Cache-Control': "no-cache"}
+            try:
+                response = requests.post(url, data=payload, headers=headers)
+                print("Fast2SMS Response:", response.json())
+            except Exception as e:
+                print("SMS Error:", e)
+
+    return redirect('/chef')
+
 @app.route('/delete_order/<int:order_id>', methods=['POST'])
 def delete_order(order_id):
     if not session.get('admin'):
@@ -334,7 +295,5 @@ def delete_order(order_id):
     db.close()
     return redirect('/chef')
 
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
