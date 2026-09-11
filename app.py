@@ -252,17 +252,19 @@ def chef():
     ORDER BY total_qty DESC
     LIMIT 5
 """)
+    most_ordered = cursor.fetchall()
 
-most_ordered = cursor.fetchall()
-""")
+        cursor.close()
+        db.close()
 
-most_ordered = cursor.fetchall()
-""")
-
-    cursor.close()
-    db.close()
-    return render_template("chef.html", orders=pending_orders, all_history=all_history, today_sales=today_sales, total_orders=total_orders, most_ordered=most_ordered)
-
+        return render_template(
+            "chef.html",
+            orders=pending_orders,
+            all_history=all_history,
+            today_sales=today_sales,
+            total_orders=total_orders,
+            most_ordered=most_ordered
+        )
 @app.route('/complete_order/<int:order_id>', methods=['POST'])
 def complete_order(order_id):
     db = get_db_connection()
