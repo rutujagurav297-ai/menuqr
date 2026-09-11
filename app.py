@@ -244,8 +244,14 @@ def chef():
     cursor.execute("SELECT COUNT(*) AS total_orders FROM orders WHERE DATE(order_time) = CURRENT_DATE")
     total_orders = cursor.fetchone()['total_orders']
 
-    cursor.execute("SELECT m.name, SUM(oi.quantity) AS total_qty, m.icon FROM order_items oi JOIN menu m ON oi.menu_id = m.id GROUP BY oi.menu_id ORDER BY total_qty DESC LIMIT 5")
-    most_ordered = cursor.fetchall()
+    cursor.execute("""
+    SELECT m.name, SUM(oi.quantity) AS total_qty, m.icon
+    FROM order_items oi
+    JOIN menu m ON oi.menu_id = m.id
+    GROUP BY m.id, m.name, m.icon
+    ORDER BY total_qty DESC
+    LIMIT 5
+""")
 
     cursor.close()
     db.close()
