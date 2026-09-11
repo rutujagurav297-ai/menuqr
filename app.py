@@ -252,10 +252,13 @@ def chef():
     ORDER BY total_qty DESC
     LIMIT 5
 """)
-        most_ordered = cursor.fetchall()
-        cursor.close()
+                LIMIT 5
+        """)
+
+    most_ordered = cursor.fetchall()
+
+    cursor.close()
     db.close()
-    
 
     return render_template(
         "chef.html",
