@@ -15,37 +15,12 @@ app = Flask(__name__)
 # Secret key Environment variable मधून घेणे सुरक्षेसाठी चांगले आहे
 app.secret_key = os.environ.get("SECRET_KEY", "hotel-taj-super-secret-key-9876")
 
-# Fast2SMS API Key
-FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
+
 def get_db_connection():
     database_URL = os.environ.get("DATABASE_URL")
     if not database_URL:
         raise ValueError("DATABASE_URL is not set")
-    
-    conn = psycopg2.connect(database_URL)
-    
-    # टेबल नसतील तर ते आपोआप तयार करण्यासाठी:
-    with conn.cursor() as cursor:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS orders (
-                id SERIAL PRIMARY KEY,
-                table_id INT,
-                total_amount NUMERIC(10, 2),
-                status VARCHAR(50) DEFAULT 'Pending',
-                mobile VARCHAR(15),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS order_items (
-                id SERIAL PRIMARY KEY,
-                order_id INT REFERENCES orders(id) ON DELETE CASCADE,
-                item_id INT,
-                quantity INT NOT NULL,
-                price NUMERIC(10, 2) NOT NULL
-            );
-        """)
-        conn.commit()
-        
-    return conn
+    return psycopg2.connect(database_URL)
 
 def generate_qr_base64(data):
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
