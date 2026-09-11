@@ -253,7 +253,8 @@ def chef():
     LIMIT 5
 """)
         most_ordered = cursor.fetchall()
-
+        cursor.close()
+    db.close()
     
 
     return render_template(
@@ -264,8 +265,7 @@ def chef():
         total_orders=total_orders,
         most_ordered=most_ordered
     )
-cursor.close()
-    db.close()
+
 @app.route('/complete_order/<int:order_id>', methods=['POST'])
 def complete_order(order_id):
     db = get_db_connection()
