@@ -253,6 +253,12 @@ def chef():
     LIMIT 5
 """)
 
+most_ordered = cursor.fetchall()
+""")
+
+most_ordered = cursor.fetchall()
+""")
+
     cursor.close()
     db.close()
     return render_template("chef.html", orders=pending_orders, all_history=all_history, today_sales=today_sales, total_orders=total_orders, most_ordered=most_ordered)
