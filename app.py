@@ -231,30 +231,41 @@ def chef():
 
     cursor.execute("SELECT * FROM orders WHERE status='Pending' ORDER BY order_time DESC")
     pending_orders = cursor.fetchall()
+
     for order in pending_orders:
-        cursor.execute("SELECT oi.*, m.name AS item_name FROM order_items oi JOIN menu m ON oi.menu_id = m.id WHERE oi.order_id=%s", (order['order_id'],))
+        cursor.execute("""
+            SELECT oi.*, m.name AS item_name
+            FROM order_items oi
+            JOIN menu m ON oi.menu_id = m.id
+            WHERE oi.order_id=%s
+        """, (order['order_id'],))
         order['order_foods'] = cursor.fetchall()
 
     cursor.execute("SELECT * FROM orders ORDER BY order_time DESC")
     all_history = cursor.fetchall()
 
-    cursor.execute("SELECT COALESCE(SUM(total), 0) AS total_sales FROM orders WHERE DATE(order_time) = CURRENT_DATE")
+    cursor.execute("""
+        SELECT COALESCE(SUM(total), 0) AS total_sales
+        FROM orders
+        WHERE DATE(order_time) = CURRENT_DATE
+    """)
     today_sales = cursor.fetchone()['total_sales']
 
-    cursor.execute("SELECT COUNT(*) AS total_orders FROM orders WHERE DATE(order_time) = CURRENT_DATE")
+    cursor.execute("""
+        SELECT COUNT(*) AS total_orders
+        FROM orders
+        WHERE DATE(order_time) = CURRENT_DATE
+    """)
     total_orders = cursor.fetchone()['total_orders']
 
     cursor.execute("""
-    SELECT m.name, SUM(oi.quantity) AS total_qty, m.icon
-    FROM order_items oi
-    JOIN menu m ON oi.menu_id = m.id
-    GROUP BY m.id, m.name, m.icon
-    ORDER BY total_qty DESC
-    LIMIT 5
-""")
-                LIMIT 5
-        """)
-
+        SELECT m.name, SUM(oi.quantity) AS total_qty, m.icon
+        FROM order_items oi
+        JOIN menu m ON oi.menu_id = m.id
+        GROUP BY m.id, m.name, m.icon
+        ORDER BY total_qty DESC
+        LIMIT 5
+    """)
     most_ordered = cursor.fetchall()
 
     cursor.close()
